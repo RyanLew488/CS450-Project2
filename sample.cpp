@@ -56,7 +56,7 @@ const int GLUIFALSE = { false };
 
 // initial window size:
 
-const int INIT_WINDOW_SIZE = { 600 };
+const int INIT_WINDOW_SIZE = { 1500 };
 
 // size of the 3d box:
 
@@ -185,10 +185,8 @@ int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
 int		DepthFightingOn;		// != 0 means to force the creation of z-fighting
 GLuint	HeliList;
-GLuint	MRotor1;
-GLuint	MRotor2;
-GLuint	TRotor1;
-GLuint	TRotor2;
+GLuint	Mrotor;
+GLuint	TRotor;
 int		MainWindow;				// window id for main graphics window
 float	Scale;					// scaling factor
 int		ShadowsOn;				// != 0 means to turn shadows on
@@ -196,6 +194,9 @@ int		WhichColor;				// index into Colors[ ]
 int		WhichProjection;		// ORTHO or PERSP
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
+boolean Cpit;
+float	Time;
+#define MS_IN_THE_ANIMATION_CYCLE		1000
 
 #include "heli.550"
 
@@ -294,6 +295,11 @@ Animate( )
 
 	// force a call to Display( ) next time it is convenient:
 
+
+	int ms = glutGet(GLUT_ELAPSED_TIME);
+	ms %= MS_IN_THE_ANIMATION_CYCLE;
+	
+	Time = (float)ms / (float)MS_IN_THE_ANIMATION_CYCLE;
 	glutSetWindow( MainWindow );
 	glutPostRedisplay( );
 }
@@ -362,15 +368,19 @@ Display( )
 
 
 	// set the eye position, look-at position, and up-vector:
+	if (Cpit) {
+		gluLookAt(-0.4, 1.8, -4.9, 0., 0., 0., 0.,1., 0.);
+	}
+	else {
 
-	gluLookAt( 0., 0., 3.,     0., 0., 0.,     0., 1., 0. );
+		gluLookAt(0., 0., 3., 0., 0., 0., 0., 1., 0.);
 
 
-	// rotate the scene:
+		// rotate the scene:
 
-	glRotatef( (GLfloat)Yrot, 0., 1., 0. );
-	glRotatef( (GLfloat)Xrot, 1., 0., 0. );
-
+		glRotatef((GLfloat)Yrot, 0., 1., 0.);
+		glRotatef((GLfloat)Xrot, 1., 0., 0.);
+	}
 
 	// uniformly scale the scene:
 
@@ -410,8 +420,28 @@ Display( )
 	glEnable( GL_NORMALIZE );
 
 
-	// draw the current object:
+	// Draw the helicoptor body
 	glCallList(HeliList);
+
+	// Draw main rotor
+
+	glPushMatrix();
+		glColor3f(1., 1., 1.);
+
+		glTranslatef(0., 2.9, -2);
+		glRotatef(360. * Time, 0, 1, 0);
+		glRotatef(90, 1, 0, 0);
+		glScalef(5, 1, 1);
+		glCallList(Mrotor);
+	glPopMatrix();
+
+	glPushMatrix();
+		glTranslatef(.5, 2.5, 9.);
+		glRotatef(360. * Time * 3, 1, 0, 0);
+		glRotatef(90, 0, 1, 0);
+		glScalef(1.5, 1, 1);
+		glCallList(TRotor);
+	glPopMatrix();
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -427,8 +457,7 @@ Display( )
 	// draw some gratuitous text that just rotates on top of the scene:
 
 	glDisable( GL_DEPTH_TEST );
-	glColor3f( 0., 1., 1. );
-	DoRasterString( 0., 1., 0., (char *)"Text That Moves" );
+
 
 
 	// draw some gratuitous text that is fixed on the screen:
@@ -447,8 +476,7 @@ Display( )
 	gluOrtho2D( 0., 100.,     0., 100. );
 	glMatrixMode( GL_MODELVIEW );
 	glLoadIdentity( );
-	glColor3f( 1., 1., 1. );
-	DoRasterString( 5., 5., 0., (char *)"Text That Doesn't" );
+
 
 
 	// swap the double-buffered framebuffers:
@@ -758,7 +786,8 @@ InitGraphics( )
 	glutTabletButtonFunc( NULL );
 	glutMenuStateFunc( NULL );
 	glutTimerFunc( -1, NULL, 0 );
-	glutIdleFunc( NULL );
+	glutIdleFunc( Animate );
+
 
 	// init glew (a window must be open to do this):
 
@@ -794,7 +823,7 @@ InitLists( )
 	HeliList = glGenLists(1);
 	glNewList(HeliList, GL_COMPILE);
 		glPushMatrix();
-		glTranslatef(0., 0., 8.0);
+			glTranslatef(0., -1., 0.);
 			glRotatef(97., 0., 1., 0.);
 			glRotatef(-15., 0., 0., 1.);
 			glBegin(GL_TRIANGLES);
@@ -827,7 +856,46 @@ InitLists( )
 			glEnd();
 		glPopMatrix();
 	glEndList();
+	#define BLADE_RADIUS		 1.0
+	#define BLADE_WIDTH			 0.4
 
+	// blade parameters:
+
+	Mrotor = glGenLists(1);
+	glNewList(Mrotor, GL_COMPILE);
+
+	// draw the helicopter blade with radius BLADE_RADIUS and
+	//	width BLADE_WIDTH centered at (0.,0.,0.) in the XY plane
+		glPushMatrix();
+			glBegin(GL_TRIANGLES);
+				glVertex2f(BLADE_RADIUS, BLADE_WIDTH / 2.);
+				glVertex2f(0., 0.);
+				glVertex2f(BLADE_RADIUS, -BLADE_WIDTH / 2.);
+
+				glVertex2f(-BLADE_RADIUS, -BLADE_WIDTH / 2.);
+				glVertex2f(0., 0.);
+				glVertex2f(-BLADE_RADIUS, BLADE_WIDTH / 2.);
+			glEnd();
+		glPopMatrix();
+	glEndList();
+
+	TRotor = glGenLists(1);
+	glNewList(TRotor, GL_COMPILE);
+
+	// draw the helicopter blade with radius BLADE_RADIUS and
+	//	width BLADE_WIDTH centered at (0.,0.,0.) in the XY plane
+	glPushMatrix();
+		glBegin(GL_TRIANGLES);
+			glVertex2f(BLADE_RADIUS, BLADE_WIDTH / 2.);
+			glVertex2f(0., 0.);
+			glVertex2f(BLADE_RADIUS, -BLADE_WIDTH / 2.);
+
+			glVertex2f(-BLADE_RADIUS, -BLADE_WIDTH / 2.);
+			glVertex2f(0., 0.);
+			glVertex2f(-BLADE_RADIUS, BLADE_WIDTH / 2.);
+		glEnd();
+		glPopMatrix();
+	glEndList();
 
 	AxesList = glGenLists( 1 );
 	glNewList( AxesList, GL_COMPILE );
@@ -860,6 +928,7 @@ Keyboard( unsigned char c, int x, int y )
 
 		case 'c':
 		case 'C':
+			Cpit = !Cpit;
 			break;
 
 		case 'q':
